@@ -13,6 +13,9 @@ SATURATION = 8
 OVERLAY_HUE = 0 # red
 EDGES_CONTRAST = 0.3
 
+EDGES_THRESH1 = 40
+EDGES_THRESH2 = 80
+
 frames = []
 sumFrame = None
 cap = cv2.VideoCapture(infile)
@@ -45,7 +48,7 @@ if outfile is not None:
 
 for frame in frames:
 	differenceFrame = numpy.clip((averageFrame - frame) * SATURATION, 0, 255).astype(numpy.uint8)
-	edges = (255 - cv2.Canny(frame.astype(numpy.uint8), 40, 80) * EDGES_CONTRAST)
+	edges = (255 - cv2.Canny(frame.astype(numpy.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST)
 
 	hsv[...,1] = differenceFrame
 	hsv[...,2] = edges
