@@ -34,13 +34,17 @@ while cap.isOpened():
 	if not ret:
 		break
 
+	# Convert input to black and white
 	frame_int = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2GRAY)
 	frame_float = frame_int.astype(np.float32)
 	if low_pass_frame is None:
 		low_pass_frame = frame_float
 
+	# Compute change
 	difference_frame = (frame_float - low_pass_frame) * OVERLAY_SATURATION
 	difference_frame_abs = np.clip(np.absolute(difference_frame), 0, 255).astype(np.uint8)
+
+	# Compute edges
 	edges_frame = cv2.Canny(frame_int, EDGES_THRESH1, EDGES_THRESH2)
 
 	# Combine edges with a lightened version of the original image to make a background reference image
