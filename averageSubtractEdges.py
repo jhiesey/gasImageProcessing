@@ -51,7 +51,7 @@ while cap.isOpened():
 	reference_channel = cv2.addWeighted(edges_frame, -EDGES_CONTRAST, frame_int, 1 - OVERLAY_BRIGTNESS, OVERLAY_BRIGTNESS * 255)
 
 	# Set up an HSV output image to combine background as brightness and difference as color saturation
-	hsv_frame = np.zeros((low_pass_frame.shape[0], low_pass_frame.shape[1], 3), np.uint8)
+	hsv_frame = np.zeros((height, width, 3), np.uint8)
 
 	# Determine overlay hue depending on sign of difference
 	hsv_frame[...,0] = np.where(difference_frame >= 0, OVERLAY_POSITIVE_HUE, OVERLAY_NEGATIVE_HUE)
