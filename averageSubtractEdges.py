@@ -1,68 +1,78 @@
 #!/usr/bin/env python3
 
-import numpy
+import numpy as np
 import cv2
 import sys
 
-infile = sys.argv[1]
-outfile = None
-if len(sys.argv) > 2:
-	outfile = sys.argv[2]
+FILTER_K = 2
 
-SATURATION = 8
-OVERLAY_HUE = 0 # red
+OVERLAY_SATURATION = 8
+OVERLAY_BRIGTNESS = 0.5
+OVERLAY_NEGATIVE_HUE = 0 # red
+OVERLAY_POSITIVE_HUE = 120 # blue
+
 EDGES_CONTRAST = 0.3
-
 EDGES_THRESH1 = 40
 EDGES_THRESH2 = 80
 
 frames = []
-sumFrame = None
+infile = sys.argv[1]
 cap = cv2.VideoCapture(infile)
 fps = cap.get(cv2.CAP_PROP_FPS)
-
-while cap.isOpened():
-	ret, rawFrame = cap.read()
-	if ret:
-		frameInt = cv2.cvtColor(rawFrame, cv2.COLOR_BGR2GRAY)
-		frameFloat = frameInt.astype(numpy.float32)
-		frames.append(frameFloat)
-
-		if sumFrame is None:
-			sumFrame = frameFloat.copy()
-		else:
-			sumFrame += frameFloat
-	else:
-		break
-cap.release()
-
-averageFrame = sumFrame / len(frames)
-
-hsv = numpy.zeros((averageFrame.shape[0], averageFrame.shape[1], 3), numpy.uint8)
-hsv[...,0] = OVERLAY_HUE
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 writer = None
-if outfile is not None:
+if len(sys.argv) > 2:
+	outfile = sys.argv[2]
 	fourcc = cv2.VideoWriter_fourcc(*'avc1')
-	writer = cv2.VideoWriter(outfile, fourcc, fps, (averageFrame.shape[1], averageFrame.shape[0]), True)
+	writer = cv2.VideoWriter(outfile, fourcc, fps, (width, height), True)
 
-for frame in frames:
-	differenceFrame = numpy.clip((averageFrame - frame) * SATURATION, 0, 255).astype(numpy.uint8)
-	edges = (255 - cv2.Canny(frame.astype(numpy.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST)
+low_pass_frame = None
+while cap.isOpened():
+	ret, raw_frame = cap.read()
+	if not ret:
+		break
 
-	hsv[...,1] = differenceFrame
-	hsv[...,2] = edges
+	frame_int = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2GRAY)
+	frame_float = frame_int.astype(np.float32)
+	if low_pass_frame is None:
+		low_pass_frame = frame_float
 
-	rgbFrame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+	difference_frame = (frame_float - low_pass_frame) * OVERLAY_SATURATION
+	difference_frame_abs = np.clip(np.absolute(difference_frame), 0, 255).astype(np.uint8)
+	edges_frame = cv2.Canny(frame_int, EDGES_THRESH1, EDGES_THRESH2)
+
+	# Combine edges with a lightened version of the original image to make a background reference image
+	reference_channel = cv2.addWeighted(edges_frame, -EDGES_CONTRAST, frame_int, 1 - OVERLAY_BRIGTNESS, OVERLAY_BRIGTNESS * 255)
+
+	# Set up an HSV output image to combine background as brightness and difference as color saturation
+	hsv_frame = np.zeros((low_pass_frame.shape[0], low_pass_frame.shape[1], 3), np.uint8)
+
+	# Determine overlay hue depending on sign of difference
+	hsv_frame[...,0] = np.where(difference_frame >= 0, OVERLAY_POSITIVE_HUE, OVERLAY_NEGATIVE_HUE)
+
+	# Difference determines color saturation/intensity
+	hsv_frame[...,1] = difference_frame_abs
+
+	# Reference determines value/brightness
+	hsv_frame[...,2] = reference_channel
+
+	# Display output
+	processed_frame = cv2.cvtColor(hsv_frame, cv2.COLOR_HSV2BGR)
 	if writer is not None:
-		writer.write(rgbFrame)
+		writer.write(processed_frame)
 	else:
-		cv2.imshow('Average subtracted', rgbFrame)
+		cv2.imshow('Processed', processed_frame)
 		if cv2.waitKey(10) & 0xFF == ord('q'):
 			break
+
+	# Compute average frame
+	low_pass_frame += (FILTER_K / 10) * (frame_float - low_pass_frame)
+
+cap.release()
 
 if writer is not None:
 	writer.release()
 
 cv2.destroyAllWindows()
-
